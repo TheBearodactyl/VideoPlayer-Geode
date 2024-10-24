@@ -1,5 +1,3 @@
-// https://github.com/phoboslab/pl_mpeg/blob/master/pl_mpeg_player.c
-// https://katyscode.wordpress.com/2013/02/28/cutting-your-teeth-on-fmod-part-5-real-time-streaming-of-programmatically-generated-audio/
 #define PL_MPEG_IMPLEMENTATION
 #include "VideoPlayer.hpp"
 #include <math.h>
@@ -9,51 +7,46 @@ using namespace cocos2d;
 
 #define APP_SHADER_SOURCE(...) #__VA_ARGS__
 
-const char* APP_VERTEX_SHADER = APP_SHADER_SOURCE(
+const char *APP_VERTEX_SHADER = APP_SHADER_SOURCE(
     attribute vec4 a_position;
     attribute vec2 a_texCoord;
     varying vec2 tex_coord;
 
-	void main() {
-        tex_coord = a_texCoord;
-		gl_Position = CC_MVPMatrix * a_position;
-	}
+    void main() {
+    tex_coord = a_texCoord;
+    gl_Position = CC_MVPMatrix * a_position;
+    }
 );
 
-const char* APP_FRAGMENT_SHADER_YCRCB = APP_SHADER_SOURCE(
-	uniform sampler2D texture_y;
-	uniform sampler2D texture_cb;
-	uniform sampler2D texture_cr;
+const char *APP_FRAGMENT_SHADER_YCRCB = APP_SHADER_SOURCE(
+    uniform sampler2D texture_y;
+    uniform sampler2D texture_cb;
+    uniform sampler2D texture_cr;
     varying vec2 tex_coord;
 
-	mat4 rec601 = mat4(
-		1.16438,  0.00000,  1.59603, -0.87079,
-		1.16438, -0.39176, -0.81297,  0.52959,
-		1.16438,  2.01723,  0.00000, -1.08139,
-		0, 0, 0, 1
-	);
+    mat4 rec601 = mat4(
+        1.16438, 0.00000, 1.59603, -0.87079,
+        1.16438, -0.39176, -0.81297, 0.52959,
+        1.16438, 2.01723, 0.00000, -1.08139,
+        0, 0, 0, 1
+    );
 
-	void main() {
-		float y = texture2D(texture_y, tex_coord).r;
-		float cb = texture2D(texture_cb, tex_coord).r;
-		float cr = texture2D(texture_cr, tex_coord).r;
+    void main() {
+    float y = texture2D(texture_y, tex_coord).r;
+    float cb = texture2D(texture_cb, tex_coord).r;
+    float cr = texture2D(texture_cr, tex_coord).r;
 
-		gl_FragColor = vec4(y, cb, cr, 1.0) * rec601;
-	}
+    gl_FragColor = vec4(y, cb, cr, 1.0) * rec601;
+    }
 );
 
 namespace videoplayer {
-    bool VideoPlayer::init(ghc::filesystem::path const& path, bool loop) {
+    bool VideoPlayer::init(std::filesystem::path const &path, bool loop) {
         if (!CCNode::init()) return false;
 
         // GENERAL
         m_path = path;
         m_stream = plm_create_with_filename(m_path.string().c_str());
-        
-        if (!m_stream) {
-            log::error("File at " + m_path.string() + " not found.");
-            return false;
-        };
 
         plm_set_loop(m_stream, loop);
         m_loop = loop;
@@ -64,7 +57,7 @@ namespace videoplayer {
         // VIDEO
         m_dimensions = CCSize(m_stream->video_decoder->mb_width, m_stream->video_decoder->mb_height);
 
-        CCGLProgram* shader = new CCGLProgram;
+        auto *shader = new CCGLProgram;
 
         setContentSize(m_dimensions * 4);
         shader->initWithVertexShaderByteArray(APP_VERTEX_SHADER, APP_FRAGMENT_SHADER_YCRCB);
@@ -75,9 +68,9 @@ namespace videoplayer {
         shader->link();
         shader->updateUniforms();
 
-        const char* texture_names[3] = {"texture_y", "texture_cb", "texture_cr"};
+        const char *texture_names[3] = {"texture_y", "texture_cb", "texture_cr"};
 
-        plm_frame_t* frame = &m_stream->video_decoder->frame_current;
+        plm_frame_t *frame = &m_stream->video_decoder->frame_current;
         plm_plane_t planes[3] = {frame->y, frame->cb, frame->cr};
 
         for (int i = 0; i < 3; i++) {
@@ -110,7 +103,7 @@ namespace videoplayer {
     };
 
     void VideoPlayer::initAudio() {
-        FMODAudioEngine* engine = FMODAudioEngine::sharedEngine();
+        FMODAudioEngine *engine = FMODAudioEngine::sharedEngine();
 
         int sampleRate = plm_get_samplerate(m_stream);
 
@@ -128,21 +121,24 @@ namespace videoplayer {
         m_samples = {};
         engine->m_system->createStream(nullptr, FMOD_OPENUSER, &soundInfo, &m_sound);
 
-        FMOD::ChannelGroup* group;
-        engine->m_globalChannel->getChannelGroup(&group);
+        FMOD::ChannelGroup *group;
+        engine->m_globalChannel->getGroup(0, &group);
 
         engine->m_system->playSound(m_sound, group, false, &m_channel);
         m_channel->setVolume(m_volume);
-        
+
         m_channel->setUserData(this);
         if (m_loop) m_channel->setCallback(&VideoPlayer::audioCallback);
     }
 
-    FMOD_RESULT F_CALLBACK VideoPlayer::audioCallback(FMOD_CHANNELCONTROL *chanControl, FMOD_CHANNELCONTROL_TYPE controlType, FMOD_CHANNELCONTROL_CALLBACK_TYPE callbackType, void *commandData1, void *commandData2) {
+    FMOD_RESULT F_CALLBACK VideoPlayer::audioCallback(FMOD_CHANNELCONTROL *chanControl,
+                                                      FMOD_CHANNELCONTROL_TYPE controlType,
+                                                      FMOD_CHANNELCONTROL_CALLBACK_TYPE callbackType,
+                                                      void *commandData1, void *commandData2) {
         if (callbackType != FMOD_CHANNELCONTROL_CALLBACK_END) return FMOD_OK;
 
-        VideoPlayer* self;
-        ((FMOD::ChannelControl*)chanControl)->getUserData((void**)&self);
+        VideoPlayer *self;
+        ((FMOD::ChannelControl *) chanControl)->getUserData((void **) &self);
         if (self->m_stopped) return FMOD_OK; // For destructor/onExit
 
         self->m_channel->stop();
@@ -153,6 +149,7 @@ namespace videoplayer {
     }
 
     static int times = 0;
+
     void VideoPlayer::update(float delta) {
         if (!m_paused) plm_decode(m_stream, delta);
     }
@@ -168,13 +165,13 @@ namespace videoplayer {
         float w = m_obContentSize.width;
         float h = m_obContentSize.height;
 
-        GLfloat vertices[12] = {0,0, w,0, w,h, 0,0, 0,h, w,h};
-        GLfloat coordinates[12] = {0,1, 1,1, 1,0, 0,1, 0,0, 1,0};
+        GLfloat vertices[12] = {0, 0, w, 0, w, h, 0, 0, 0, h, w, h};
+        GLfloat coordinates[12] = {0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0};
 
 
         glEnableVertexAttribArray(kCCVertexAttribFlag_Position);
         glVertexAttribPointer(kCCVertexAttrib_Position, 2, GL_FLOAT, GL_FALSE, 0, vertices);
-        
+
         glEnableVertexAttribArray(kCCVertexAttribFlag_TexCoords);
         glVertexAttribPointer(kCCVertexAttrib_TexCoords, 2, GL_FLOAT, GL_FALSE, 0, coordinates);
 
@@ -191,10 +188,10 @@ namespace videoplayer {
         onExit();
     }
 
-    void VideoPlayer::videoCallback(plm_t* mpeg, plm_frame_t* frame, void* user) {
-        VideoPlayer* self = (VideoPlayer*) user;
+    void VideoPlayer::videoCallback(plm_t *mpeg, plm_frame_t *frame, void *user) {
+        VideoPlayer *self = (VideoPlayer *) user;
 
-        plm_plane_t* frames[3] = {&frame->y, &frame->cb, &frame->cr};
+        plm_plane_t *frames[3] = {&frame->y, &frame->cb, &frame->cr};
 
         for (int i = 0; i < 3; i++) {
             GLuint texture = self->m_textures[i];
@@ -209,38 +206,40 @@ namespace videoplayer {
         }
     }
 
-    void VideoPlayer::audioCallback(plm_t* mpeg, plm_samples_t* samples, void* user) {
-        VideoPlayer* self = (VideoPlayer*) user;
+    void VideoPlayer::audioCallback(plm_t *mpeg, plm_samples_t *samples, void *user) {
+        VideoPlayer *self = (VideoPlayer *) user;
 
         for (unsigned int i = 0; i < samples->count * 2; i++) {
             self->m_samples.push(samples->interleaved[i]);
         }
 
-        while (self->m_samples.size() > PLM_AUDIO_SAMPLES_PER_FRAME * 16) { // i think this is 4 frames of wiggle room but im not sure it just sounds best this way
+        while (self->m_samples.size() > PLM_AUDIO_SAMPLES_PER_FRAME * 16) {
+            // i think this is 4 frames of wiggle room but im not sure it just sounds best this way
             self->m_samples.pop();
         }
     }
 
     FMOD_RESULT F_CALLBACK VideoPlayer::PCMRead(FMOD_SOUND *sound, void *data, unsigned int length) {
-        VideoPlayer* self;
-        ((FMOD::Sound*)sound)->getUserData((void**)&self);
+        VideoPlayer *self;
+        ((FMOD::Sound *) sound)->getUserData((void **) &self);
         if (!self) return FMOD_OK;
 
-        float* buf = (float*)data;
+        float *buf = (float *) data;
 
-        for (unsigned int i = 0; i < (length / sizeof(float)) / 2 && self->m_samples.size() >= 2; i++) { // Always keep the ears synced
-            buf[2*i]=self->m_samples.front();
+        for (unsigned int i = 0; i < (length / sizeof(float)) / 2 && self->m_samples.size() >= 2; i++) {
+            // Always keep the ears synced
+            buf[2 * i] = self->m_samples.front();
             self->m_samples.pop();
 
-            buf[2*i+1]=self->m_samples.front();
+            buf[2 * i + 1] = self->m_samples.front();
             self->m_samples.pop();
         }
 
         return FMOD_OK;
     }
 
-    VideoPlayer* VideoPlayer::create(ghc::filesystem::path const& path, bool loop) {
-        VideoPlayer* ret = new VideoPlayer;
+    VideoPlayer *VideoPlayer::create(std::filesystem::path const &path, bool loop) {
+        auto ret = new VideoPlayer;
         if (ret && ret->init(path, loop)) {
             ret->autorelease();
             return ret;

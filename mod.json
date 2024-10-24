@@ -1,9 +1,14 @@
 {
-	"geode": "1.0.0",
-	"version": "v1.0.1",
-	"id": "fig.video_player",
+	"geode": "3.8.1",
+	"gd": {
+		"android": "2.206",
+		"windows": "2.206",
+		"mac": "2.206"
+	},
+	"version": "v1.0.0",
+	"id": "thebearodactyl.video_player",
 	"name": "Video Player",
-	"developer": "fig",
+	"developer": "The Bearodactyl",
 	"description": "Provides an API for playing mpeg (.mpg) videos",
 	"api": {
 		"include": [
